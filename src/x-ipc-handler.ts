@@ -1,39 +1,44 @@
 /**
- * X Integration IPC Handler
+ * X Integration IPC Handler (host side)
  *
- * Handles all x_* IPC messages from container agents.
- * This is the entry point for X integration in the host process.
+ * Handles x_* IPC task messages from container agents.
+ * Spawns Playwright scripts from .claude/skills/x-integration/scripts/
+ * using the user's persistent Chrome profile.
  */
 
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import pino from 'pino';
 
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  transport: { target: 'pino-pretty', options: { colorize: true } }
-});
+import { logger } from './logger.js';
 
-interface SkillResult {
+interface XResult {
   success: boolean;
   message: string;
   data?: unknown;
 }
 
-// Run a skill script as subprocess
-async function runScript(script: string, args: object): Promise<SkillResult> {
-  const scriptPath = path.join(process.cwd(), '.claude', 'skills', 'x-integration', 'scripts', `${script}.ts`);
+async function runScript(script: string, args: object): Promise<XResult> {
+  const scriptPath = path.join(
+    process.cwd(),
+    '.claude',
+    'skills',
+    'x-integration',
+    'scripts',
+    `${script}.ts`,
+  );
 
   return new Promise((resolve) => {
     const proc = spawn('npx', ['tsx', scriptPath], {
       cwd: process.cwd(),
-      env: { ...process.env, NANOCLAW_ROOT: process.cwd() },
-      stdio: ['pipe', 'pipe', 'pipe']
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     let stdout = '';
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
     proc.stdin.write(JSON.stringify(args));
     proc.stdin.end();
 
@@ -52,7 +57,10 @@ async function runScript(script: string, args: object): Promise<SkillResult> {
         const lines = stdout.trim().split('\n');
         resolve(JSON.parse(lines[lines.length - 1]));
       } catch {
-        resolve({ success: false, message: `Failed to parse output: ${stdout.slice(0, 200)}` });
+        resolve({
+          success: false,
+          message: `Failed to parse output: ${stdout.slice(0, 200)}`,
+        });
       }
     });
 
@@ -63,32 +71,30 @@ async function runScript(script: string, args: object): Promise<SkillResult> {
   });
 }
 
-// Write result to IPC results directory
-function writeResult(dataDir: string, sourceGroup: string, requestId: string, result: SkillResult): void {
+function writeXResult(
+  dataDir: string,
+  sourceGroup: string,
+  requestId: string,
+  result: XResult,
+): void {
   const resultsDir = path.join(dataDir, 'ipc', sourceGroup, 'x_results');
   fs.mkdirSync(resultsDir, { recursive: true });
   fs.writeFileSync(path.join(resultsDir, `${requestId}.json`), JSON.stringify(result));
 }
 
 /**
- * Handle X integration IPC messages
- *
- * @returns true if message was handled, false if not an X message
+ * Handle x_* IPC messages. Returns true if the message was handled.
  */
 export async function handleXIpc(
   data: Record<string, unknown>,
   sourceGroup: string,
   isMain: boolean,
-  dataDir: string
+  dataDir: string,
 ): Promise<boolean> {
   const type = data.type as string;
 
-  // Only handle x_* types
-  if (!type?.startsWith('x_')) {
-    return false;
-  }
+  if (!type?.startsWith('x_')) return false;
 
-  // Only main group can use X integration
   if (!isMain) {
     logger.warn({ sourceGroup, type }, 'X integration blocked: not main group');
     return true;
@@ -102,7 +108,7 @@ export async function handleXIpc(
 
   logger.info({ type, requestId }, 'Processing X request');
 
-  let result: SkillResult;
+  let result: XResult;
 
   switch (type) {
     case 'x_post':
@@ -153,11 +159,13 @@ export async function handleXIpc(
       return false;
   }
 
-  writeResult(dataDir, sourceGroup, requestId, result);
+  await writeXResult(dataDir, sourceGroup, requestId, result);
+
   if (result.success) {
     logger.info({ type, requestId }, 'X request completed');
   } else {
     logger.error({ type, requestId, message: result.message }, 'X request failed');
   }
+
   return true;
 }

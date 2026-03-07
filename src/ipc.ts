@@ -9,6 +9,7 @@ import {
   MAIN_GROUP_FOLDER,
   TIMEZONE,
 } from './config.js';
+import { handleXIpc } from './x-ipc-handler.js';
 import { AvailableGroup } from './container-runner.js';
 import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
@@ -381,7 +382,11 @@ export async function processTaskIpc(
       }
       break;
 
-    default:
-      logger.warn({ type: data.type }, 'Unknown IPC task type');
+    default: {
+      const handled = await handleXIpc(data as Record<string, unknown>, sourceGroup, isMain, DATA_DIR);
+      if (!handled) {
+        logger.warn({ type: data.type }, 'Unknown IPC task type');
+      }
+    }
   }
 }
