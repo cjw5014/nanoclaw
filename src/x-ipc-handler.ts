@@ -159,7 +159,7 @@ export async function handleXIpc(
       return false;
   }
 
-  await writeXResult(dataDir, sourceGroup, requestId, result);
+  writeXResult(dataDir, sourceGroup, requestId, result);
 
   if (result.success) {
     logger.info({ type, requestId }, 'X request completed');
