@@ -148,6 +148,7 @@ function createTestOpts(
         added_at: '2024-01-01T00:00:00.000Z',
       },
     })),
+    registerEphemeralGroup: vi.fn(),
     ...overrides,
   };
 }
@@ -847,6 +848,61 @@ describe('DiscordChannel', () => {
         'dc:1234567890123456',
         expect.anything(),
       );
+    });
+
+    it('registers thread JID ephemerally so host message loop can query it', async () => {
+      const opts = createTestOpts();
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const msg = createMessage({
+        channelId: '9999000000000001',
+        channelType: 11, // PublicThread
+        parentChannelId: '1234567890123456',
+        content: 'Thread message',
+        guildName: 'Server',
+      });
+      await triggerMessage(msg);
+
+      // Must call registerEphemeralGroup with the thread JID so index.ts includes it
+      // in getNewMessages queries and processGroupMessages can find the group
+      expect(opts.registerEphemeralGroup).toHaveBeenCalledWith(
+        'dc:9999000000000001',
+        expect.objectContaining({ folder: 'test-server' }),
+      );
+    });
+
+    it('does not re-register thread JID if already in registeredGroups', async () => {
+      // Simulate second message in thread — JID already registered
+      const opts = createTestOpts({
+        registeredGroups: vi.fn(() => ({
+          'dc:1234567890123456': {
+            name: 'Test Server #general',
+            folder: 'test-server',
+            trigger: '@Andy',
+            added_at: '2024-01-01T00:00:00.000Z',
+          },
+          'dc:9999000000000001': {
+            name: 'Test Server #thread',
+            folder: 'test-server',
+            trigger: '@Andy',
+            added_at: '2024-01-01T00:00:00.000Z',
+          },
+        })),
+      });
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const msg = createMessage({
+        channelId: '9999000000000001',
+        channelType: 11,
+        parentChannelId: '1234567890123456',
+        content: 'Second thread message',
+        guildName: 'Server',
+      });
+      await triggerMessage(msg);
+
+      expect(opts.registerEphemeralGroup).not.toHaveBeenCalled();
     });
 
     it('ignores thread message when parent channel is also unregistered', async () => {

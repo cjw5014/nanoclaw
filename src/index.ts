@@ -454,6 +454,10 @@ async function main(): Promise<void> {
       isGroup?: boolean,
     ) => storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
+    registerEphemeralGroup: (jid: string, group: RegisteredGroup) => {
+      registeredGroups[jid] = group;
+      logger.debug({ jid, folder: group.folder }, 'Ephemeral group registered (thread)');
+    },
   };
 
   // Create and connect all registered channels via the registry.

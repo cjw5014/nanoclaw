@@ -144,6 +144,14 @@ export class DiscordChannel implements Channel {
         return;
       }
 
+      // For thread JIDs that resolved via the parent, register the thread
+      // ephemerally in the host so the message loop queries it.
+      // Without this, index.ts only queries Object.keys(registeredGroups)
+      // which never includes thread JIDs, so messages are stored but never processed.
+      if (isThread && !this.opts.registeredGroups()[chatJid]) {
+        this.opts.registerEphemeralGroup?.(chatJid, group);
+      }
+
       // Deliver message — startMessageLoop() will pick it up
       this.opts.onMessage(chatJid, {
         id: msgId,

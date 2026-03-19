@@ -9,6 +9,12 @@ export interface ChannelOpts {
   onMessage: OnInboundMessage;
   onChatMetadata: OnChatMetadata;
   registeredGroups: () => Record<string, RegisteredGroup>;
+  /**
+   * Ephemeral group registration — adds a derived JID (e.g. a Discord thread)
+   * to the host's in-memory registeredGroups so the message loop queries it.
+   * Not persisted to DB; re-registered automatically on the next message.
+   */
+  registerEphemeralGroup?: (jid: string, group: RegisteredGroup) => void;
 }
 
 export type ChannelFactory = (opts: ChannelOpts) => Channel | null;
