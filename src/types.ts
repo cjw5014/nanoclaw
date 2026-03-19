@@ -30,6 +30,7 @@ export interface AllowedRoot {
 export interface ContainerConfig {
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
+  image?: string;   // Override the default container image for this group
 }
 
 export interface RegisteredGroup {

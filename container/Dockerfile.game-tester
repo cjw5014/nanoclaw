@@ -1,0 +1,58 @@
+# NanoClaw Game Tester Container
+# Extends the base agent image with Godot 4 + virtual display for visual game testing.
+#
+# Capabilities:
+#   - Xvfb virtual framebuffer (software rendering, no GPU required)
+#   - xdotool for keyboard/mouse input simulation
+#   - scrot + imagemagick for screenshots and image comparison
+#   - ffmpeg for video capture
+#   - Godot 4 headless binary (downloaded at build time)
+
+FROM nanoclaw-agent:latest
+
+USER root
+
+# Install display + input simulation tools
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    xdotool \
+    scrot \
+    imagemagick \
+    ffmpeg \
+    x11-utils \
+    libgles2 \
+    libgl1 \
+    libxrandr2 \
+    libxinerama1 \
+    libxcursor1 \
+    libxi6 \
+    libxext6 \
+    unzip \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Godot 4 (headless Linux binary, architecture-aware)
+# Override GODOT_VERSION at build time: --build-arg GODOT_VERSION=4.3
+ARG GODOT_VERSION=4.6
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+      x86_64)  GODOT_ARCH="x86_64" ;; \
+      aarch64) GODOT_ARCH="arm64"  ;; \
+      *)        echo "Unsupported arch: $ARCH" && exit 1 ;; \
+    esac && \
+    wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.${GODOT_ARCH}.zip" \
+      -O /tmp/godot.zip \
+    && unzip -q /tmp/godot.zip -d /tmp/godot \
+    && mv "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.${GODOT_ARCH}" /usr/local/bin/godot \
+    && chmod +x /usr/local/bin/godot \
+    && rm -rf /tmp/godot /tmp/godot.zip
+
+# Set display for Xvfb (agents must start Xvfb before launching Godot)
+ENV DISPLAY=:99
+ENV GODOT_BIN=/usr/local/bin/godot
+
+# ImageMagick policy: allow reading/writing all formats needed for screenshots
+RUN sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/' /etc/ImageMagick-6/policy.xml 2>/dev/null || true \
+    && sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml 2>/dev/null || true
+
+USER node
