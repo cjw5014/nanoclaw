@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { DATA_DIR, MAX_CONCURRENT_CONTAINERS } from './config.js';
+import { sanitizeJidForPath } from './container-runner.js';
 import { logger } from './logger.js';
 
 interface QueuedTask {
@@ -163,7 +164,8 @@ export class GroupQueue {
       return false;
     state.idleWaiting = false; // Agent is about to receive work, no longer idle
 
-    const inputDir = path.join(DATA_DIR, 'ipc', state.groupFolder, 'input');
+    const inputDirName = `input-${sanitizeJidForPath(groupJid)}`;
+    const inputDir = path.join(DATA_DIR, 'ipc', state.groupFolder, inputDirName);
     try {
       fs.mkdirSync(inputDir, { recursive: true });
       const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}.json`;
@@ -184,7 +186,8 @@ export class GroupQueue {
     const state = this.getGroup(groupJid);
     if (!state.active || !state.groupFolder) return;
 
-    const inputDir = path.join(DATA_DIR, 'ipc', state.groupFolder, 'input');
+    const inputDirName = `input-${sanitizeJidForPath(groupJid)}`;
+    const inputDir = path.join(DATA_DIR, 'ipc', state.groupFolder, inputDirName);
     try {
       fs.mkdirSync(inputDir, { recursive: true });
       fs.writeFileSync(path.join(inputDir, '_close'), '');

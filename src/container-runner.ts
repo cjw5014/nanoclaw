@@ -54,9 +54,15 @@ interface VolumeMount {
   readonly: boolean;
 }
 
+/** Sanitize a JID for use as a filesystem directory name. */
+export function sanitizeJidForPath(jid: string): string {
+  return jid.replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
 function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
+  chatJid?: string,
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const projectRoot = process.cwd();
@@ -166,10 +172,21 @@ function buildVolumeMounts(
   const groupIpcDir = resolveGroupIpcPath(group.folder);
   fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
   fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true });
   mounts.push({
     hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
+    readonly: false,
+  });
+
+  // Per-chatJid input directory: each container gets its own input channel.
+  // Without this, containers sharing a groupFolder (e.g. parent channel and
+  // its threads) would race to read from the same input/ directory.
+  const inputDirName = chatJid ? `input-${sanitizeJidForPath(chatJid)}` : 'input';
+  const chatJidInputDir = path.join(groupIpcDir, inputDirName);
+  fs.mkdirSync(chatJidInputDir, { recursive: true });
+  mounts.push({
+    hostPath: chatJidInputDir,
+    containerPath: '/workspace/ipc/input',
     readonly: false,
   });
 
@@ -267,7 +284,7 @@ export async function runContainerAgent(
   const groupDir = resolveGroupFolderPath(group.folder);
   fs.mkdirSync(groupDir, { recursive: true });
 
-  const mounts = buildVolumeMounts(group, input.isMain);
+  const mounts = buildVolumeMounts(group, input.isMain, input.chatJid);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `nanoclaw-${safeName}-${Date.now()}`;
   const containerArgs = buildContainerArgs(mounts, containerName, group.containerConfig?.image);
