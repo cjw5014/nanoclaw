@@ -29,6 +29,7 @@ vi.mock('discord.js', () => {
     MessageCreate: 'messageCreate',
     ClientReady: 'ready',
     Error: 'error',
+    ThreadCreate: 'threadCreate',
   };
 
   const GatewayIntentBits = {
@@ -60,10 +61,10 @@ vi.mock('discord.js', () => {
 
     async login(_token: string) {
       this._ready = true;
-      // Fire the ready event
+      // Fire the ready event — pass `this` as the readyClient (mirrors discord.js behavior)
       const readyHandlers = this.eventHandlers.get('ready') || [];
       for (const h of readyHandlers) {
-        h({ user: this.user });
+        await h(this);
       }
     }
 
@@ -76,6 +77,25 @@ vi.mock('discord.js', () => {
         send: vi.fn().mockResolvedValue(undefined),
         sendTyping: vi.fn().mockResolvedValue(undefined),
       }),
+    };
+
+    // Minimal guilds.cache needed by joinExistingThreads
+    guilds = {
+      cache: new Map([
+        ['guild1', {
+          id: 'guild1',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Map([
+              ['1234567890123456', {
+                id: '1234567890123456',
+                threads: {
+                  fetchActive: vi.fn().mockResolvedValue({ threads: new Map() }),
+                },
+              }],
+            ])),
+          },
+        }],
+      ]),
     };
 
     destroy() {
@@ -884,6 +904,62 @@ describe('DiscordChannel', () => {
         'dc:9999000000000003',
         expect.objectContaining({ content: 'Announcement thread' }),
       );
+    });
+  });
+
+  // --- Thread auto-join ---
+
+  describe('thread auto-join', () => {
+    it('joins a new thread when its parent channel is registered', async () => {
+      const opts = createTestOpts();
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const joinFn = vi.fn().mockResolvedValue(undefined);
+      const thread = {
+        id: '9999000000000001',
+        parentId: '1234567890123456', // registered parent
+        name: 'my-thread',
+        join: joinFn,
+      };
+
+      const handlers = currentClient().eventHandlers.get('threadCreate') || [];
+      for (const h of handlers) await h(thread);
+
+      expect(joinFn).toHaveBeenCalled();
+    });
+
+    it('does not join a thread whose parent is unregistered', async () => {
+      const opts = createTestOpts();
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const joinFn = vi.fn().mockResolvedValue(undefined);
+      const thread = {
+        id: '9999000000000099',
+        parentId: '8888000000000000', // NOT registered
+        name: 'other-thread',
+        join: joinFn,
+      };
+
+      const handlers = currentClient().eventHandlers.get('threadCreate') || [];
+      for (const h of handlers) await h(thread);
+
+      expect(joinFn).not.toHaveBeenCalled();
+    });
+
+    it('does not join a thread with no parentId', async () => {
+      const opts = createTestOpts();
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const joinFn = vi.fn().mockResolvedValue(undefined);
+      const thread = { id: '9999000000000001', parentId: null, name: 'orphan', join: joinFn };
+
+      const handlers = currentClient().eventHandlers.get('threadCreate') || [];
+      for (const h of handlers) await h(thread);
+
+      expect(joinFn).not.toHaveBeenCalled();
     });
   });
 

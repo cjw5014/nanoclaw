@@ -1,4 +1,4 @@
-import { ChannelType, Client, Events, GatewayIntentBits, Message, TextChannel, ThreadChannel } from 'discord.js';
+import { AnyThreadChannel, ChannelType, Client, Events, GatewayIntentBits, Message, TextChannel, ThreadChannel } from 'discord.js';
 
 import { ASSISTANT_NAME, DISCORD_BOT_TOKEN, TRIGGER_PATTERN } from '../config.js';
 import { logger } from '../logger.js';
@@ -161,13 +161,31 @@ export class DiscordChannel implements Channel {
       );
     });
 
+    // Auto-join threads created in registered channels so the bot receives messages in them.
+    // Discord bots are not automatically members of new threads — without joining, MessageCreate
+    // events from the thread are never delivered.
+    this.client.on(Events.ThreadCreate, async (thread: AnyThreadChannel) => {
+      if (!thread.parentId) return;
+      const parentJid = `dc:${thread.parentId}`;
+      if (!this.opts.registeredGroups()[parentJid]) return;
+      try {
+        await thread.join();
+        logger.info(
+          { threadId: thread.id, parentId: thread.parentId, name: thread.name },
+          'Auto-joined thread in registered channel',
+        );
+      } catch (err) {
+        logger.warn({ err, threadId: thread.id }, 'Failed to auto-join thread');
+      }
+    });
+
     // Handle errors gracefully
     this.client.on(Events.Error, (err) => {
       logger.error({ err: err.message }, 'Discord client error');
     });
 
     return new Promise<void>((resolve) => {
-      this.client!.once(Events.ClientReady, (readyClient) => {
+      this.client!.once(Events.ClientReady, async (readyClient) => {
         logger.info(
           { username: readyClient.user.tag, id: readyClient.user.id },
           'Discord bot connected',
@@ -176,11 +194,48 @@ export class DiscordChannel implements Channel {
         console.log(
           `  Use /chatid command or check channel IDs in Discord settings\n`,
         );
+
+        // Join any active threads that already exist in registered channels.
+        // Handles threads created before this bot session started.
+        await this.joinExistingThreads(readyClient);
+
         resolve();
       });
 
       this.client!.login(this.botToken);
     });
+  }
+
+  private async joinExistingThreads(readyClient: Client): Promise<void> {
+    const registeredJids = new Set(Object.keys(this.opts.registeredGroups()));
+    let joined = 0;
+
+    for (const guild of readyClient.guilds.cache.values()) {
+      try {
+        const channels = await guild.channels.fetch();
+        for (const channel of channels.values()) {
+          if (!channel || !registeredJids.has(`dc:${channel.id}`)) continue;
+          if (!('threads' in channel)) continue;
+
+          const textChannel = channel as TextChannel;
+          const activeThreads = await textChannel.threads.fetchActive();
+          for (const thread of activeThreads.threads.values()) {
+            try {
+              await thread.join();
+              joined++;
+            } catch {
+              // Thread may already be joined or archived
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, guildId: guild.id }, 'Failed to fetch channels for thread join');
+      }
+    }
+
+    if (joined > 0) {
+      logger.info({ joined }, 'Joined existing active threads in registered channels');
+    }
   }
 
   async sendMessage(jid: string, text: string): Promise<void> {
