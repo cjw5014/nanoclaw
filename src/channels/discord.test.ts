@@ -189,6 +189,7 @@ function createMessage(overrides: {
 
   return {
     channelId,
+    type: 0, // MessageType.Default
     id: overrides.messageId ?? 'msg_001',
     content: overrides.content ?? 'Hello everyone',
     createdAt: overrides.createdAt ?? new Date('2024-01-01T00:00:00.000Z'),

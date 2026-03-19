@@ -37,6 +37,10 @@ export class DiscordChannel implements Channel {
       // Ignore bot messages (including own)
       if (message.author.bot) return;
 
+      // Ignore system messages (thread creation, pins, boosts, etc.)
+      // Only process regular messages (type 0) and replies (type 19)
+      if (message.type !== 0 && message.type !== 19) return;
+
       const channelId = message.channelId;
       const chatJid = `dc:${channelId}`;
       let content = message.content;
