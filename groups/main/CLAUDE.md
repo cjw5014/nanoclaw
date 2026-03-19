@@ -11,6 +11,7 @@ You are Andy, a personal assistant. You help with tasks, answer questions, and c
 - Run bash commands in your sandbox
 - Schedule tasks to run later or on a recurring basis
 - Send messages back to the chat
+- **Post to X (Twitter)** — get trends, post tweets, like, reply, retweet, and quote tweet
 
 ## Communication
 
@@ -69,9 +70,17 @@ Main has read-only access to the project and read-write access to its group fold
 | `/workspace/group` | `groups/main/` | read-write |
 
 Key paths inside the container:
-- `/workspace/project/store/messages.db` - SQLite database
-- `/workspace/project/store/messages.db` (registered_groups table) - Group config
+- `/workspace/project/store/messages.db` - SQLite database (messages, registered_groups, scheduled_tasks)
 - `/workspace/project/groups/` - All group folders
+
+---
+
+## Active Scheduled Tasks
+
+| Task | Schedule | Description |
+|------|----------|-------------|
+| `task-daily-digest-*` | `0 7 * * *` (7am daily) | Morning digest — world news, Tesla, SpaceX, X trending |
+| `task-claude-md-sync-*` | `0 3 * * 0` (Sundays 3am) | Weekly maintenance — updates this CLAUDE.md |
 
 ---
 
@@ -108,52 +117,48 @@ Then wait a moment and re-read `available_groups.json`.
 **Fallback**: Query the SQLite database directly:
 
 ```bash
-sqlite3 /workspace/project/store/messages.db "
-  SELECT jid, name, last_message_time
-  FROM chats
-  WHERE jid LIKE '%@g.us' AND jid != '__group_sync__'
-  ORDER BY last_message_time DESC
-  LIMIT 10;
+node -e "
+const db = require('/workspace/project/node_modules/better-sqlite3')('/workspace/project/store/messages.db', {readonly:true});
+console.log(JSON.stringify(db.prepare('SELECT jid, name, last_message_time FROM chats WHERE jid LIKE \"%@g.us\" ORDER BY last_message_time DESC LIMIT 10').all(), null, 2));
 "
 ```
 
 ### Registered Groups Config
 
-Groups are registered in `/workspace/project/data/registered_groups.json`:
+Groups are stored in the SQLite database at `/workspace/project/store/messages.db`, in the `registered_groups` table.
 
-```json
-{
-  "1234567890-1234567890@g.us": {
-    "name": "Family Chat",
-    "folder": "family-chat",
-    "trigger": "@Andy",
-    "added_at": "2024-01-31T12:00:00.000Z"
-  }
-}
+To list registered groups:
+```bash
+node -e "
+const db = require('/workspace/project/node_modules/better-sqlite3')('/workspace/project/store/messages.db', {readonly:true});
+console.log(JSON.stringify(db.prepare('SELECT jid, name, folder, trigger_pattern, requires_trigger FROM registered_groups').all(), null, 2));
+"
 ```
 
 Fields:
-- **Key**: The WhatsApp JID (unique identifier for the chat)
+- **jid**: The WhatsApp JID (unique identifier for the chat)
 - **name**: Display name for the group
 - **folder**: Folder name under `groups/` for this group's files and memory
-- **trigger**: The trigger word (usually same as global, but could differ)
-- **requiresTrigger**: Whether `@trigger` prefix is needed (default: `true`). Set to `false` for solo/personal chats where all messages should be processed
-- **added_at**: ISO timestamp when registered
+- **trigger_pattern**: The trigger word/pattern (e.g. `@Andy`)
+- **requires_trigger**: Whether trigger prefix is needed (0 = no trigger, 1 = trigger required)
 
 ### Trigger Behavior
 
 - **Main group**: No trigger needed — all messages are processed automatically
-- **Groups with `requiresTrigger: false`**: No trigger needed — all messages processed (use for 1-on-1 or solo chats)
+- **Groups with `requires_trigger = 0`**: No trigger needed — all messages processed (use for 1-on-1 or solo chats)
 - **Other groups** (default): Messages must start with `@AssistantName` to be processed
 
 ### Adding a Group
 
-1. Query the database to find the group's JID
-2. Read `/workspace/project/data/registered_groups.json`
-3. Add the new group entry with `containerConfig` if needed
-4. Write the updated JSON back
-5. Create the group folder: `/workspace/project/groups/{folder-name}/`
-6. Optionally create an initial `CLAUDE.md` for the group
+Use the `mcp__nanoclaw__register_group` tool:
+
+```
+register_group(jid: "...", name: "Family Chat", folder: "family-chat", trigger: "@Andy")
+```
+
+This inserts a row into `registered_groups` and the system picks it up automatically.
+
+Then optionally create an initial `CLAUDE.md` for the group at `/workspace/project/groups/{folder-name}/CLAUDE.md`.
 
 Example folder name conventions:
 - "Family Chat" → `family-chat`
@@ -162,40 +167,37 @@ Example folder name conventions:
 
 #### Adding Additional Directories for a Group
 
-Groups can have extra directories mounted. Add `containerConfig` to their entry:
-
-```json
-{
-  "1234567890@g.us": {
-    "name": "Dev Team",
-    "folder": "dev-team",
-    "trigger": "@Andy",
-    "added_at": "2026-01-31T12:00:00Z",
-    "containerConfig": {
-      "additionalMounts": [
-        {
-          "hostPath": "~/projects/webapp",
-          "containerPath": "webapp",
-          "readonly": false
-        }
-      ]
-    }
-  }
-}
-```
-
-The directory will appear at `/workspace/extra/webapp` in that group's container.
+Groups can have extra directories mounted. This requires editing the group's config in the database — contact the system administrator or use the setup skill.
 
 ### Removing a Group
 
-1. Read `/workspace/project/data/registered_groups.json`
-2. Remove the entry for that group
-3. Write the updated JSON back
-4. The group folder and its files remain (don't delete them)
+To remove a group, delete its row from the `registered_groups` table in SQLite. The group folder and its files remain (don't delete them).
 
 ### Listing Groups
 
-Read `/workspace/project/data/registered_groups.json` and format it nicely.
+Query the `registered_groups` table as shown above.
+
+---
+
+## X (Twitter) Integration
+
+X integration is active. Use these MCP tools to interact with X:
+
+| Tool | Description |
+|------|-------------|
+| `mcp__nanoclaw__x_get_trends` | Get current trending topics on X |
+| `mcp__nanoclaw__x_post` | Post a new tweet |
+| `mcp__nanoclaw__x_like` | Like a tweet by ID |
+| `mcp__nanoclaw__x_reply` | Reply to a tweet by ID |
+| `mcp__nanoclaw__x_retweet` | Retweet a tweet by ID |
+| `mcp__nanoclaw__x_quote` | Quote tweet with added commentary |
+
+Usage example:
+```
+mcp__nanoclaw__x_get_trends()
+mcp__nanoclaw__x_post(text: "Hello from Andy!")
+mcp__nanoclaw__x_reply(tweet_id: "123456789", text: "Great point!")
+```
 
 ---
 
@@ -207,7 +209,7 @@ You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts
 
 ## Scheduling for Other Groups
 
-When scheduling tasks for other groups, use the `target_group_jid` parameter with the group's JID from `registered_groups.json`:
+When scheduling tasks for other groups, use the `target_group_jid` parameter with the group's JID from the `registered_groups` table:
 - `schedule_task(prompt: "...", schedule_type: "cron", schedule_value: "0 9 * * 1", target_group_jid: "120363336345536173@g.us")`
 
 The task will run in that group's context with access to their files and memory.
