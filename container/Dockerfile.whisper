@@ -1,0 +1,18 @@
+# Whisper transcription container — stateless, audio in / text out
+# Uses faster-whisper (CTranslate2) with the tiny model for fast CPU inference.
+# No API calls, no network access needed at runtime.
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir faster-whisper
+
+# Download the tiny model at build time so it's baked into the image.
+# faster-whisper auto-downloads CTranslate2-format models on first use.
+RUN python3 -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')"
+
+COPY whisper-transcribe.py /app/transcribe.py
+
+ENTRYPOINT ["python3", "/app/transcribe.py"]

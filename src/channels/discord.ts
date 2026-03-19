@@ -2,6 +2,7 @@ import { AnyThreadChannel, ChannelType, Client, Events, GatewayIntentBits, Messa
 
 import { ASSISTANT_NAME, DISCORD_BOT_TOKEN, TRIGGER_PATTERN } from '../config.js';
 import { logger } from '../logger.js';
+import { transcribeAudio } from '../transcription.js';
 import {
   Channel,
   OnChatMetadata,
@@ -84,20 +85,23 @@ export class DiscordChannel implements Channel {
         }
       }
 
-      // Handle attachments — store placeholders so the agent knows something was sent
+      // Handle attachments — transcribe audio, store placeholders for others
       if (message.attachments.size > 0) {
-        const attachmentDescriptions = [...message.attachments.values()].map((att) => {
+        const attachmentPromises = [...message.attachments.values()].map(async (att) => {
           const contentType = att.contentType || '';
           if (contentType.startsWith('image/')) {
             return `[Image: ${att.name || 'image'}]`;
           } else if (contentType.startsWith('video/')) {
             return `[Video: ${att.name || 'video'}]`;
           } else if (contentType.startsWith('audio/')) {
+            const text = await transcribeAudio(att.url);
+            if (text) return `[Voice: ${text}]`;
             return `[Audio: ${att.name || 'audio'}]`;
           } else {
             return `[File: ${att.name || 'file'}]`;
           }
         });
+        const attachmentDescriptions = await Promise.all(attachmentPromises);
         if (content) {
           content = `${content}\n${attachmentDescriptions.join('\n')}`;
         } else {
