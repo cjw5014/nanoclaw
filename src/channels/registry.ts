@@ -15,6 +15,11 @@ export interface ChannelOpts {
    * Not persisted to DB; re-registered automatically on the next message.
    */
   registerEphemeralGroup?: (jid: string, group: RegisteredGroup) => void;
+  /**
+   * Remove an ephemeral JID (e.g. a deleted or archived Discord thread)
+   * from the host's in-memory registeredGroups.
+   */
+  unregisterEphemeralGroup?: (jid: string) => void;
 }
 
 export type ChannelFactory = (opts: ChannelOpts) => Channel | null;

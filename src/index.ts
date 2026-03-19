@@ -458,6 +458,10 @@ async function main(): Promise<void> {
       registeredGroups[jid] = group;
       logger.debug({ jid, folder: group.folder }, 'Ephemeral group registered (thread)');
     },
+    unregisterEphemeralGroup: (jid: string) => {
+      delete registeredGroups[jid];
+      logger.debug({ jid }, 'Ephemeral group unregistered (thread deleted/archived)');
+    },
   };
 
   // Create and connect all registered channels via the registry.

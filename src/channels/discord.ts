@@ -187,6 +187,24 @@ export class DiscordChannel implements Channel {
       }
     });
 
+    // Remove ephemeral thread registrations when threads are deleted or archived.
+    this.client.on(Events.ThreadDelete, (thread: AnyThreadChannel) => {
+      const jid = `dc:${thread.id}`;
+      if (this.opts.registeredGroups()[jid]) {
+        this.opts.unregisterEphemeralGroup?.(jid);
+        logger.info({ threadId: thread.id }, 'Unregistered deleted thread');
+      }
+    });
+
+    this.client.on(Events.ThreadUpdate, (_oldThread: AnyThreadChannel, newThread: AnyThreadChannel) => {
+      if (!newThread.archived) return;
+      const jid = `dc:${newThread.id}`;
+      if (this.opts.registeredGroups()[jid]) {
+        this.opts.unregisterEphemeralGroup?.(jid);
+        logger.info({ threadId: newThread.id }, 'Unregistered archived thread');
+      }
+    });
+
     // Handle errors gracefully
     this.client.on(Events.Error, (err) => {
       logger.error({ err: err.message }, 'Discord client error');

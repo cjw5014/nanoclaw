@@ -30,6 +30,8 @@ vi.mock('discord.js', () => {
     ClientReady: 'ready',
     Error: 'error',
     ThreadCreate: 'threadCreate',
+    ThreadDelete: 'threadDelete',
+    ThreadUpdate: 'threadUpdate',
   };
 
   const GatewayIntentBits = {
@@ -149,6 +151,7 @@ function createTestOpts(
       },
     })),
     registerEphemeralGroup: vi.fn(),
+    unregisterEphemeralGroup: vi.fn(),
     ...overrides,
   };
 }
@@ -1016,6 +1019,68 @@ describe('DiscordChannel', () => {
       for (const h of handlers) await h(thread);
 
       expect(joinFn).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- Thread cleanup ---
+
+  describe('thread cleanup', () => {
+    function registeredWithThread() {
+      const groups: Record<string, any> = {
+        'dc:1234567890123456': { name: 'Test Server #general', folder: 'test-server', trigger: '@Andy', added_at: '' },
+        'dc:9999000000000001': { name: 'Test Thread', folder: 'test-server', trigger: '@Andy', added_at: '' },
+      };
+      return vi.fn(() => groups);
+    }
+
+    it('unregisters thread JID when thread is deleted', async () => {
+      const opts = createTestOpts({ registeredGroups: registeredWithThread() });
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const handlers = currentClient().eventHandlers.get('threadDelete') || [];
+      for (const h of handlers) await h({ id: '9999000000000001' });
+
+      expect(opts.unregisterEphemeralGroup).toHaveBeenCalledWith('dc:9999000000000001');
+    });
+
+    it('does not unregister a thread JID that was never registered', async () => {
+      const opts = createTestOpts(); // only has parent channel
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const handlers = currentClient().eventHandlers.get('threadDelete') || [];
+      for (const h of handlers) await h({ id: '9999000000000001' });
+
+      expect(opts.unregisterEphemeralGroup).not.toHaveBeenCalled();
+    });
+
+    it('unregisters thread JID when thread is archived', async () => {
+      const opts = createTestOpts({ registeredGroups: registeredWithThread() });
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const handlers = currentClient().eventHandlers.get('threadUpdate') || [];
+      for (const h of handlers) await h(
+        { id: '9999000000000001', archived: false },
+        { id: '9999000000000001', archived: true },
+      );
+
+      expect(opts.unregisterEphemeralGroup).toHaveBeenCalledWith('dc:9999000000000001');
+    });
+
+    it('does not unregister thread when updated but not archived', async () => {
+      const opts = createTestOpts({ registeredGroups: registeredWithThread() });
+      const channel = new DiscordChannel('test-token', opts);
+      await channel.connect();
+
+      const handlers = currentClient().eventHandlers.get('threadUpdate') || [];
+      for (const h of handlers) await h(
+        { id: '9999000000000001', archived: false },
+        { id: '9999000000000001', archived: false, name: 'Renamed Thread' },
+      );
+
+      expect(opts.unregisterEphemeralGroup).not.toHaveBeenCalled();
     });
   });
 
