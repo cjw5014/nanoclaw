@@ -28,10 +28,15 @@ async function runScript(script: string, args: object): Promise<XResult> {
     `${script}.ts`,
   );
 
+  // Resolve npx from the same directory as the running node binary,
+  // since launchd's PATH may not include nvm/node paths.
+  const nodeDir = path.dirname(process.execPath);
+  const npxBin = path.join(nodeDir, 'npx');
+
   return new Promise((resolve) => {
-    const proc = spawn('npx', ['tsx', scriptPath], {
+    const proc = spawn(npxBin, ['tsx', scriptPath], {
       cwd: process.cwd(),
-      env: { ...process.env },
+      env: { ...process.env, PATH: `${nodeDir}:${process.env.PATH || ''}` },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
