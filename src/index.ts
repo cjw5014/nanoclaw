@@ -138,15 +138,15 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const channel = findChannel(channels, chatJid);
   if (!channel) return true;
 
-  const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
-
   const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
   const missedMessages = getMessagesSince(chatJid, sinceTimestamp, ASSISTANT_NAME);
 
   if (missedMessages.length === 0) return true;
 
-  // For non-main groups, check if trigger is required and present
-  if (!isMainGroup && group.requiresTrigger !== false) {
+  // Honor the group's trigger setting. Main's elevated privileges are about
+  // IPC authorization, not message routing — if the registration sets
+  // requires_trigger, respect it even for main.
+  if (group.requiresTrigger !== false) {
     const hasTrigger = missedMessages.some((m) =>
       TRIGGER_PATTERN.test(m.content.trim()),
     );
@@ -348,10 +348,9 @@ async function startMessageLoop(): Promise<void> {
           const channel = findChannel(channels, chatJid);
           if (!channel) continue;
 
-          const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
-          const needsTrigger = !isMainGroup && group.requiresTrigger !== false;
+          const needsTrigger = group.requiresTrigger !== false;
 
-          // For non-main groups, only act on trigger messages.
+          // When triggers are required, only act on trigger messages.
           // Non-trigger messages accumulate in DB and get pulled as
           // context when a trigger eventually arrives.
           if (needsTrigger) {
