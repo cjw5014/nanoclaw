@@ -21,14 +21,22 @@ interface TranscriptionResult {
 /**
  * Download audio from a URL, transcribe it using the local Whisper container,
  * and return the transcription text. Returns null on any failure.
+ *
+ * Optional `authHeader` lets channels (e.g. Slack) pass a Bearer token —
+ * Slack's `url_private` requires `Authorization: Bearer xoxb-...`.
  */
-export async function transcribeAudio(url: string): Promise<string | null> {
+export async function transcribeAudio(
+  url: string,
+  authHeader?: string,
+): Promise<string | null> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nanoclaw-whisper-'));
   const tmpFile = path.join(tmpDir, 'audio');
 
   try {
-    // 1. Download audio from Discord CDN
-    const response = await fetch(url);
+    const response = await fetch(
+      url,
+      authHeader ? { headers: { Authorization: authHeader } } : undefined,
+    );
     if (!response.ok) throw new Error(`Download failed: ${response.status}`);
     const buffer = Buffer.from(await response.arrayBuffer());
     fs.writeFileSync(tmpFile, buffer);

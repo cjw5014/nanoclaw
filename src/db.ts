@@ -134,6 +134,9 @@ function createSchema(database: Database.Database): void {
       `UPDATE chats SET channel = 'discord', is_group = 1 WHERE jid LIKE 'dc:%'`,
     );
     database.exec(
+      `UPDATE chats SET channel = 'slack', is_group = 1 WHERE jid LIKE 'sl:%'`,
+    );
+    database.exec(
       `UPDATE chats SET channel = 'telegram', is_group = 1 WHERE jid LIKE 'tg:%'`,
     );
   } catch {

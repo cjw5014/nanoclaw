@@ -8,8 +8,8 @@ import { readEnvFile } from './env.js';
 const envConfig = readEnvFile([
   'ASSISTANT_NAME',
   'ASSISTANT_HAS_OWN_NUMBER',
-  'DISCORD_BOT_TOKEN',
-  'DISCORD_ONLY',
+  'SLACK_BOT_TOKEN',
+  'SLACK_APP_TOKEN',
 ]);
 
 export const ASSISTANT_NAME =
@@ -83,8 +83,10 @@ export const TRIGGER_PATTERN = new RegExp(
 export const TIMEZONE =
   process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-// Discord configuration
-export const DISCORD_BOT_TOKEN =
-  process.env.DISCORD_BOT_TOKEN || envConfig.DISCORD_BOT_TOKEN || '';
-export const DISCORD_ONLY =
-  (process.env.DISCORD_ONLY || envConfig.DISCORD_ONLY) === 'true';
+// Slack configuration
+// SLACK_BOT_TOKEN: Bot User OAuth Token (xoxb-...) from OAuth & Permissions
+// SLACK_APP_TOKEN: App-Level Token (xapp-...) with connections:write — used for Socket Mode
+export const SLACK_BOT_TOKEN =
+  process.env.SLACK_BOT_TOKEN || envConfig.SLACK_BOT_TOKEN || '';
+export const SLACK_APP_TOKEN =
+  process.env.SLACK_APP_TOKEN || envConfig.SLACK_APP_TOKEN || '';

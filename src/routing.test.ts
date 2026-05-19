@@ -18,9 +18,9 @@ describe('JID ownership patterns', () => {
     expect(jid.endsWith('@g.us')).toBe(true);
   });
 
-  it('Discord JID: starts with dc:', () => {
-    const jid = 'dc:1234567890123456';
-    expect(jid.startsWith('dc:')).toBe(true);
+  it('Slack JID: starts with sl:', () => {
+    const jid = 'sl:C1234567890';
+    expect(jid.startsWith('sl:')).toBe(true);
   });
 
   it('WhatsApp DM JID: ends with @s.whatsapp.net', () => {
@@ -44,34 +44,34 @@ describe('getAvailableGroups', () => {
     expect(groups.map((g) => g.jid)).not.toContain('user@s.whatsapp.net');
   });
 
-  it('includes Discord channel JIDs', () => {
-    storeChatMetadata('dc:1234567890123456', '2024-01-01T00:00:01.000Z', 'Discord Channel', 'discord', true);
+  it('includes Slack channel JIDs', () => {
+    storeChatMetadata('sl:C1234567890', '2024-01-01T00:00:01.000Z', 'Slack Channel', 'slack', true);
     storeChatMetadata('user@s.whatsapp.net', '2024-01-01T00:00:02.000Z', 'User DM', 'whatsapp', false);
 
     const groups = getAvailableGroups();
     expect(groups).toHaveLength(1);
-    expect(groups[0].jid).toBe('dc:1234567890123456');
+    expect(groups[0].jid).toBe('sl:C1234567890');
   });
 
-  it('marks registered Discord channels correctly', () => {
-    storeChatMetadata('dc:1234567890123456', '2024-01-01T00:00:01.000Z', 'DC Registered', 'discord', true);
-    storeChatMetadata('dc:9999999999999999', '2024-01-01T00:00:02.000Z', 'DC Unregistered', 'discord', true);
+  it('marks registered Slack channels correctly', () => {
+    storeChatMetadata('sl:C1234567890', '2024-01-01T00:00:01.000Z', 'SL Registered', 'slack', true);
+    storeChatMetadata('sl:C9999999999', '2024-01-01T00:00:02.000Z', 'SL Unregistered', 'slack', true);
 
     _setRegisteredGroups({
-      'dc:1234567890123456': {
-        name: 'DC Registered',
-        folder: 'dc-registered',
+      'sl:C1234567890': {
+        name: 'SL Registered',
+        folder: 'sl-registered',
         trigger: '@Andy',
         added_at: '2024-01-01T00:00:00.000Z',
       },
     });
 
     const groups = getAvailableGroups();
-    const dcReg = groups.find((g) => g.jid === 'dc:1234567890123456');
-    const dcUnreg = groups.find((g) => g.jid === 'dc:9999999999999999');
+    const slReg = groups.find((g) => g.jid === 'sl:C1234567890');
+    const slUnreg = groups.find((g) => g.jid === 'sl:C9999999999');
 
-    expect(dcReg?.isRegistered).toBe(true);
-    expect(dcUnreg?.isRegistered).toBe(false);
+    expect(slReg?.isRegistered).toBe(true);
+    expect(slUnreg?.isRegistered).toBe(false);
   });
 
   it('excludes __group_sync__ sentinel', () => {
@@ -133,14 +133,14 @@ describe('getAvailableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('mixes WhatsApp and Discord chats ordered by activity', () => {
+  it('mixes WhatsApp and Slack chats ordered by activity', () => {
     storeChatMetadata('wa@g.us', '2024-01-01T00:00:01.000Z', 'WhatsApp', 'whatsapp', true);
-    storeChatMetadata('dc:555', '2024-01-01T00:00:03.000Z', 'Discord', 'discord', true);
+    storeChatMetadata('sl:C555', '2024-01-01T00:00:03.000Z', 'Slack', 'slack', true);
     storeChatMetadata('wa2@g.us', '2024-01-01T00:00:02.000Z', 'WhatsApp 2', 'whatsapp', true);
 
     const groups = getAvailableGroups();
     expect(groups).toHaveLength(3);
-    expect(groups[0].jid).toBe('dc:555');
+    expect(groups[0].jid).toBe('sl:C555');
     expect(groups[1].jid).toBe('wa2@g.us');
     expect(groups[2].jid).toBe('wa@g.us');
   });

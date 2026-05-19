@@ -179,6 +179,11 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   };
 
   await channel.setTyping?.(chatJid, true);
+  // Discord's typing indicator expires after 10 seconds. Refresh it every
+  // 8 seconds so it stays visible while the agent is thinking.
+  const typingInterval = channel.setTyping
+    ? setInterval(() => channel.setTyping!(chatJid, true), 8000)
+    : null;
   let hadError = false;
   let outputSentToUser = false;
 
@@ -190,6 +195,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
       logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
       if (text) {
+        if (typingInterval) clearInterval(typingInterval);
+        await channel.setTyping?.(chatJid, false);
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
       }
@@ -202,6 +209,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }
   });
 
+  if (typingInterval) clearInterval(typingInterval);
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
 
@@ -372,8 +380,6 @@ async function startMessageLoop(): Promise<void> {
             lastAgentTimestamp[chatJid] =
               messagesToSend[messagesToSend.length - 1].timestamp;
             saveState();
-            // Show typing indicator while the container processes the piped message
-            channel.setTyping?.(chatJid, true);
           } else {
             // No active container — enqueue for a new one
             queue.enqueueMessageCheck(chatJid);

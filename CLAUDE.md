@@ -4,17 +4,20 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process that connects to WhatsApp, routes messages to Claude Agent SDK running in containers (Linux VMs). Each group has isolated filesystem and memory.
+Single Node.js process that connects to **Slack** (only) via Socket Mode, routes messages to Claude Agent SDK running in containers (Linux VMs). Each group has isolated filesystem and memory.
+
+**Channel policy:** Only explicitly registered channels receive responses. DMs and unregistered channels are silently ignored — `onChatMetadata` is called (for discovery) but `onMessage` is never delivered. Slack threads inherit their parent channel's registration and get isolated context per thread (each thread has its own `chatJid`, formatted `sl:<channelId>:<thread_ts>`).
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Orchestrator: state, message loop, agent invocation |
-| `src/channels/whatsapp.ts` | WhatsApp connection, auth, send/receive |
+| `src/channels/slack.ts` | Slack Socket Mode connection, thread support, send/receive |
+| `src/channels/index.ts` | Channel barrel — imports trigger self-registration |
 | `src/ipc.ts` | IPC watcher and task processing |
 | `src/router.ts` | Message formatting and outbound routing |
-| `src/config.ts` | Trigger pattern, paths, intervals |
+| `src/config.ts` | Trigger pattern, paths, intervals, SLACK_BOT_TOKEN, SLACK_APP_TOKEN |
 | `src/container-runner.ts` | Spawns agent containers with mounts |
 | `src/task-scheduler.ts` | Runs scheduled tasks |
 | `src/db.ts` | SQLite operations |

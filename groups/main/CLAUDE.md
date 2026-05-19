@@ -77,10 +77,11 @@ Key paths inside the container:
 
 ## Active Scheduled Tasks
 
-| Task | Schedule | Description |
-|------|----------|-------------|
-| `task-daily-digest-*` | `0 7 * * *` (7am daily) | Morning digest — world news, Tesla, SpaceX, X trending |
-| `task-claude-md-sync-*` | `0 3 * * 0` (Sundays 3am) | Weekly maintenance — updates this CLAUDE.md |
+| Task | Schedule | Group | Description |
+|------|----------|-------|-------------|
+| `task-daily-digest-*` | `0 7 * * *` (7am daily) | main | Morning digest — world news, Tesla, SpaceX, X trending |
+| `task-claude-md-sync-*` | `0 3 * * 0` (Sundays 3am) | main | Weekly maintenance — updates this CLAUDE.md |
+| `task-railhead-tests-*` | `0 2 * * *` (2am daily) | game-test | Runs full Railhead test suite; silent on success, alerts on failure |
 
 ---
 
